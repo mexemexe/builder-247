@@ -2,24 +2,26 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from prometheus_swarm.database.transaction_models import Base, Transaction, TransactionAudit
-from datetime import datetime, timedelta
+from datetime import datetime, UTC, timedelta
 
-@pytest.fixture
+@pytest.fixture(scope='function')
 def engine():
     """Create an in-memory SQLite database for testing."""
     return create_engine('sqlite:///:memory:')
 
-@pytest.fixture
+@pytest.fixture(scope='function')
 def tables(engine):
     """Create tables in the test database."""
     Base.metadata.create_all(engine)
     return Base.metadata.tables
 
-@pytest.fixture
-def session(engine):
+@pytest.fixture(scope='function')
+def session(engine, tables):
     """Create a database session for testing."""
     Session = sessionmaker(bind=engine)
-    return Session()
+    session = Session()
+    yield session
+    session.close()
 
 def test_create_transaction(session):
     """Test creating a basic transaction."""
@@ -102,7 +104,7 @@ def test_transaction_error_handling(session):
 
 def test_transaction_timestamp(session):
     """Test transaction timestamp behavior."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     transaction = Transaction(
         transaction_type='withdrawal',
         amount=75.25,
