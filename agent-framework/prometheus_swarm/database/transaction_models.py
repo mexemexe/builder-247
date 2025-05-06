@@ -1,12 +1,12 @@
 from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, ForeignKey
 from sqlalchemy.orm import relationship, declarative_base
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 
 Base = declarative_base()
 
 def get_utc_time():
     """Return a timezone-aware UTC timestamp."""
-    return datetime.now(UTC)
+    return datetime.now(timezone.utc)
 
 class Transaction(Base):
     """
