@@ -1,12 +1,8 @@
-from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, ForeignKey, func
 from sqlalchemy.orm import relationship, declarative_base
-from datetime import datetime, timezone
+from datetime import timezone
 
 Base = declarative_base()
-
-def get_utc_time():
-    """Return a timezone-aware UTC timestamp."""
-    return datetime.now(timezone.utc)
 
 class Transaction(Base):
     """
@@ -32,7 +28,7 @@ class Transaction(Base):
     amount = Column(Float, nullable=False)
     currency = Column(String(10), nullable=False)
     status = Column(String(50), nullable=False)
-    timestamp = Column(DateTime(timezone=True), default=get_utc_time)
+    timestamp = Column(DateTime(timezone=True), server_default=func.current_timestamp())
     source_account = Column(String(100))
     destination_account = Column(String(100))
     description = Column(String(255))
@@ -64,7 +60,7 @@ class TransactionAudit(Base):
     transaction_id = Column(Integer, ForeignKey('transactions.id'))
     action = Column(String(50), nullable=False)
     actor = Column(String(100), nullable=False)
-    timestamp = Column(DateTime(timezone=True), default=get_utc_time)
+    timestamp = Column(DateTime(timezone=True), server_default=func.current_timestamp())
     details = Column(String(255))
 
     transaction = relationship("Transaction", back_populates="audits")
