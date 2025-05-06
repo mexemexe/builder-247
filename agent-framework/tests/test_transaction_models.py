@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from prometheus_swarm.database.transaction_models import Base, Transaction, TransactionAudit
-from datetime import datetime, UTC, timedelta
+from datetime import datetime, timezone, timedelta
 
 @pytest.fixture(scope='function')
 def engine():
@@ -104,7 +104,7 @@ def test_transaction_error_handling(session):
 
 def test_transaction_timestamp(session):
     """Test transaction timestamp behavior."""
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     transaction = Transaction(
         transaction_type='withdrawal',
         amount=75.25,
@@ -115,6 +115,6 @@ def test_transaction_timestamp(session):
     session.commit()
 
     # Check that timestamp is close to current time
-    assert transaction.timestamp.tzinfo is not None
+    assert transaction.timestamp.tzinfo == timezone.utc
     assert transaction.timestamp >= now - timedelta(seconds=1)
     assert transaction.timestamp <= now + timedelta(seconds=1)
