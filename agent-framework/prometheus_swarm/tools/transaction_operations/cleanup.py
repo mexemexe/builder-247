@@ -49,13 +49,19 @@ class TransactionIdCleaner:
                     tx_timestamp = datetime.fromisoformat(timestamp_str)
                     age = current_time - tx_timestamp
                     
-                    # Adjusted criteria for age check
-                    if (max_age_hours == 0 and tx_timestamp == current_time) or \
-                       (max_age_hours > 0 and age.total_seconds() <= (max_age_hours * 3600)):
-                        valid_transaction_ids.append(tx_id)
-                    else:
-                        removed_transactions.append(tx_id)
-                        logger.debug(f"Removing stale transaction ID: {tx_id}")
+                    # More flexible age check
+                    if max_age_hours == 0:
+                        # Strict 0 hours: only current moments allowed
+                        if tx_timestamp == current_time:
+                            valid_transaction_ids.append(tx_id)
+                    elif max_age_hours > 0:
+                        # For any positive max_age_hours
+                        max_age_timedelta = timedelta(hours=max_age_hours)
+                        if age <= max_age_timedelta:
+                            valid_transaction_ids.append(tx_id)
+                        else:
+                            removed_transactions.append(tx_id)
+                            logger.debug(f"Removing stale transaction ID: {tx_id}")
                 
                 except (ValueError, IndexError) as parsing_error:
                     logger.warning(f"Could not parse transaction ID {tx_id}: {parsing_error}")
