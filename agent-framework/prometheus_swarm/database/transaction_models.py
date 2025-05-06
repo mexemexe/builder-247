@@ -4,6 +4,10 @@ from datetime import datetime, UTC
 
 Base = declarative_base()
 
+def get_utc_time():
+    """Return a timezone-aware UTC timestamp."""
+    return datetime.now(UTC)
+
 class Transaction(Base):
     """
     Represents a financial or system transaction with comprehensive tracking.
@@ -28,7 +32,7 @@ class Transaction(Base):
     amount = Column(Float, nullable=False)
     currency = Column(String(10), nullable=False)
     status = Column(String(50), nullable=False)
-    timestamp = Column(DateTime, default=lambda: datetime.now(UTC))
+    timestamp = Column(DateTime(timezone=True), default=get_utc_time)
     source_account = Column(String(100))
     destination_account = Column(String(100))
     description = Column(String(255))
@@ -60,7 +64,7 @@ class TransactionAudit(Base):
     transaction_id = Column(Integer, ForeignKey('transactions.id'))
     action = Column(String(50), nullable=False)
     actor = Column(String(100), nullable=False)
-    timestamp = Column(DateTime, default=lambda: datetime.now(UTC))
+    timestamp = Column(DateTime(timezone=True), default=get_utc_time)
     details = Column(String(255))
 
     transaction = relationship("Transaction", back_populates="audits")
