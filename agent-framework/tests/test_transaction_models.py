@@ -115,5 +115,6 @@ def test_transaction_timestamp(session):
     session.commit()
 
     # Check that timestamp is close to current time
+    assert transaction.timestamp.tzinfo is not None
     assert transaction.timestamp >= now - timedelta(seconds=1)
     assert transaction.timestamp <= now + timedelta(seconds=1)
