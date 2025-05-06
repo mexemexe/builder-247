@@ -43,12 +43,16 @@ class TransactionIdCleaner:
             
             for tx_id in transaction_ids:
                 try:
-                    # Assuming transaction ID includes timestamp information
-                    # This is a placeholder and should be adapted to your actual transaction ID format
-                    tx_timestamp = datetime.fromisoformat(tx_id.split('_')[-1])
+                    # Parsing timestamp from the transaction ID
+                    # Supports format: {prefix}_{timestamp}
+                    timestamp_str = tx_id.split('_')[-1]
+                    tx_timestamp = datetime.fromisoformat(timestamp_str)
                     age = current_time - tx_timestamp
                     
-                    if age <= timedelta(hours=max_age_hours):
+                    # Include transaction if its age is less than or equal to max age
+                    if max_age_hours == 0 and tx_timestamp == current_time:
+                        continue  # Strict 0 hours condition
+                    elif max_age_hours > 0 and age <= timedelta(hours=max_age_hours):
                         valid_transaction_ids.append(tx_id)
                     else:
                         removed_transactions.append(tx_id)

@@ -44,6 +44,8 @@ prometheus_swarm/tools/github_operations/templates_legacy.py
 prometheus_swarm/tools/planner_operations/__init__.py
 prometheus_swarm/tools/planner_operations/definitions.py
 prometheus_swarm/tools/planner_operations/implementations.py
+prometheus_swarm/tools/transaction_operations/__init__.py
+prometheus_swarm/tools/transaction_operations/cleanup.py
 prometheus_swarm/utils/__init__.py
 prometheus_swarm/utils/distribution.py
 prometheus_swarm/utils/errors.py
