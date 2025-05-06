@@ -51,7 +51,8 @@ def test_max_age_edge_cases():
     cleaned_zero = TransactionIdCleaner.cleanup_old_transaction_ids([tx_zero_age], max_age_hours=0)
     assert len(cleaned_zero) == 0
     
-    # Test very large max age
+    # Test very large max age with a transaction from a year ago
     tx_large_age = f"tx_large_{(current_time - timedelta(days=365)).isoformat()}"
+    # With 8760 hours (a full year), the transaction should be kept
     cleaned_large = TransactionIdCleaner.cleanup_old_transaction_ids([tx_large_age], max_age_hours=8760)
-    assert len(cleaned_large) == 1
+    assert len(cleaned_large) == 1  # Should keep the transaction
