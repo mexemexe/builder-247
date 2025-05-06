@@ -49,10 +49,9 @@ class TransactionIdCleaner:
                     tx_timestamp = datetime.fromisoformat(timestamp_str)
                     age = current_time - tx_timestamp
                     
-                    # Include transaction if its age is less than or equal to max age
-                    if max_age_hours == 0 and tx_timestamp == current_time:
-                        continue  # Strict 0 hours condition
-                    elif max_age_hours > 0 and age <= timedelta(hours=max_age_hours):
+                    # Adjusted criteria for age check
+                    if (max_age_hours == 0 and tx_timestamp == current_time) or \
+                       (max_age_hours > 0 and age.total_seconds() <= (max_age_hours * 3600)):
                         valid_transaction_ids.append(tx_id)
                     else:
                         removed_transactions.append(tx_id)
