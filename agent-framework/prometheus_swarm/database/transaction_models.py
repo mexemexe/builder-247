@@ -1,7 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, ForeignKey
-from sqlalchemy.orm import relationship
-from sqlalchemy.ext.declarative import declarative_base
-from datetime import datetime
+from sqlalchemy.orm import relationship, declarative_base
+from datetime import datetime, UTC
 
 Base = declarative_base()
 
@@ -29,12 +28,14 @@ class Transaction(Base):
     amount = Column(Float, nullable=False)
     currency = Column(String(10), nullable=False)
     status = Column(String(50), nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=lambda: datetime.now(UTC))
     source_account = Column(String(100))
     destination_account = Column(String(100))
     description = Column(String(255))
     is_completed = Column(Boolean, default=False)
     error_code = Column(String(50))
+
+    audits = relationship("TransactionAudit", back_populates="transaction")
 
     def __repr__(self):
         """String representation of the Transaction."""
@@ -59,7 +60,7 @@ class TransactionAudit(Base):
     transaction_id = Column(Integer, ForeignKey('transactions.id'))
     action = Column(String(50), nullable=False)
     actor = Column(String(100), nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=lambda: datetime.now(UTC))
     details = Column(String(255))
 
     transaction = relationship("Transaction", back_populates="audits")
@@ -68,6 +69,3 @@ class TransactionAudit(Base):
         """String representation of the TransactionAudit."""
         return (f"&lt;TransactionAudit(id={self.id}, transaction_id={self.transaction_id}, "
                 f"action={self.action}, actor={self.actor})&gt;")
-
-# Add back_populates to Transaction
-Transaction.audits = relationship("TransactionAudit", back_populates="transaction")
