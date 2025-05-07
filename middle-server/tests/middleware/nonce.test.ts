@@ -1,4 +1,4 @@
-import { createNonceMiddleware, generateNonce } from '../../src/middleware/nonce';
+import { createNonceMiddleware, generateNonce, ClientLibrary, NonceUtils } from '../../src/middleware/nonce';
 import { Request, Response, NextFunction } from 'express';
 
 describe('Nonce Middleware', () => {
@@ -20,30 +20,28 @@ describe('Nonce Middleware', () => {
   });
 
   describe('generateNonce', () => {
-    it('should generate a valid nonce', () => {
-      const nonce = generateNonce();
+    it('should generate unique nonces for different libraries', () => {
+      const axiosNonce = generateNonce(ClientLibrary.AXIOS);
+      const fetchNonce = generateNonce(ClientLibrary.FETCH);
+      const defaultNonce = generateNonce();
       
-      // Check nonce length (64 characters)
-      expect(nonce).toHaveLength(64);
-      
-      // Check nonce is hexadecimal
-      expect(/^[a-f0-9]{64}$/i.test(nonce)).toBe(true);
+      expect(axiosNonce).not.toBe(fetchNonce);
+      expect(axiosNonce).not.toBe(defaultNonce);
+      expect(fetchNonce).not.toBe(defaultNonce);
     });
 
-    it('should generate unique nonces', () => {
-      const nonce1 = generateNonce();
-      const nonce2 = generateNonce();
+    it('should generate valid nonce formats', () => {
+      const nonce = generateNonce();
       
-      expect(nonce1).not.toBe(nonce2);
+      // Check nonce length and format
+      expect(nonce).toHaveLength(64);
+      expect(/^[a-f0-9]{64}$/i.test(nonce)).toBe(true);
     });
   });
 
   describe('createNonceMiddleware', () => {
-    it('should allow request with valid nonce in headers', () => {
+    it('should automatically inject nonce for mutating methods', () => {
       const middleware = createNonceMiddleware();
-      const nonce = generateNonce();
-      
-      mockRequest.headers = { 'x-nonce': nonce };
       
       middleware(
         mockRequest as Request, 
@@ -51,37 +49,26 @@ describe('Nonce Middleware', () => {
         nextFunction
       );
 
+      // Check that a nonce was injected
+      expect(mockRequest.headers['x-nonce']).toBeDefined();
+      expect(mockRequest.body.nonce).toBeDefined();
       expect(nextFunction).toHaveBeenCalled();
     });
 
-    it('should allow request with valid nonce in body', () => {
-      const middleware = createNonceMiddleware();
-      const nonce = generateNonce();
+    it('should support library-specific nonce injection', () => {
+      const axiosMiddleware = createNonceMiddleware({ 
+        clientLibrary: ClientLibrary.AXIOS 
+      });
       
-      mockRequest.body = { nonce };
-      
-      middleware(
+      axiosMiddleware(
         mockRequest as Request, 
         mockResponse as Response, 
         nextFunction
       );
 
+      // Check axios-specific nonce header
+      expect(mockRequest.headers['x-axios-nonce']).toBeDefined();
       expect(nextFunction).toHaveBeenCalled();
-    });
-
-    it('should reject request without nonce', () => {
-      const middleware = createNonceMiddleware();
-      
-      middleware(
-        mockRequest as Request, 
-        mockResponse as Response, 
-        nextFunction
-      );
-
-      expect(mockResponse.status).toHaveBeenCalledWith(400);
-      expect(mockResponse.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: expect.any(String) })
-      );
     });
 
     it('should reject request with invalid nonce format', () => {
@@ -174,6 +161,13 @@ describe('Nonce Middleware', () => {
       expect(nextFunction).toHaveBeenCalled();
       
       jest.useRealTimers();
+    });
+  });
+
+  describe('NonceUtils', () => {
+    it('should export nonce utilities', () => {
+      expect(NonceUtils.generateNonce).toBeDefined();
+      expect(NonceUtils.createNonceMiddleware).toBeDefined();
     });
   });
 });
