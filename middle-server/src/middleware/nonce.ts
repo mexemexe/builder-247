@@ -1,8 +1,19 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
-import { createHash } from 'crypto';
 
-// Enum for API client libraries
+// Nonce storage mechanism
+const usedNonces = new Set<string>();
+
+// Enum for supported HTTP methods
+enum HttpMethod {
+  GET = 'GET',
+  POST = 'POST',
+  PUT = 'PUT',
+  PATCH = 'PATCH',
+  DELETE = 'DELETE'
+}
+
+// API Client Libraries supported
 export enum ClientLibrary {
   AXIOS = 'axios',
   FETCH = 'fetch',
@@ -10,157 +21,169 @@ export enum ClientLibrary {
   DEFAULT = 'default'
 }
 
-// Nonce middleware configuration interface
+// Nonce Middleware Configuration Interface
 export interface NonceConfig {
   /**
    * Nonce expiration time in milliseconds
-   * Default is 5 minutes (300000 ms)
+   * @default 5 minutes (300000 ms)
    */
   expirationTime?: number;
-  
+
   /**
-   * Maximum number of nonces to store before cleaning
-   * Default is 1000
+   * Maximum number of nonces to store
+   * @default 1000
    */
   maxNonceStorage?: number;
 
   /**
-   * Specify the client library for nonce injection
-   * Default is 'default'
+   * Specify the client library for nonce handling
+   * @default ClientLibrary.DEFAULT
    */
   clientLibrary?: ClientLibrary;
+
+  /**
+   * HTTP methods to protect with nonce validation
+   * @default [POST, PUT, PATCH, DELETE]
+   */
+  protectedMethods?: HttpMethod[];
 }
 
-// Global nonce storage to prevent replay attacks
-const usedNonces = new Set<string>();
-
 /**
- * Generate a secure nonce for API requests
- * @param library Optional client library type
- * @returns A 64-character hexadecimal nonce
+ * Generate a cryptographically secure nonce
+ * @param library Optional client library specification
+ * @returns Secure nonce string
  */
-export function generateNonce(library: ClientLibrary = ClientLibrary.DEFAULT): string {
+export function generateNonce(
+  library: ClientLibrary = ClientLibrary.DEFAULT
+): string {
   const baseNonce = crypto.randomBytes(32).toString('hex');
   
-  // Optional library-specific nonce generation
+  // Library-specific nonce generation for additional uniqueness
   switch (library) {
     case ClientLibrary.AXIOS:
-      return createHash('sha256').update(baseNonce + 'axios').digest('hex');
+      return crypto.createHash('sha256')
+        .update(baseNonce + 'axios')
+        .digest('hex');
     case ClientLibrary.FETCH:
-      return createHash('sha256').update(baseNonce + 'fetch').digest('hex');
+      return crypto.createHash('sha256')
+        .update(baseNonce + 'fetch')
+        .digest('hex');
     case ClientLibrary.SUPERAGENT:
-      return createHash('sha256').update(baseNonce + 'superagent').digest('hex');
+      return crypto.createHash('sha256')
+        .update(baseNonce + 'superagent')
+        .digest('hex');
     default:
       return baseNonce;
   }
 }
 
 /**
- * Nonce injection middleware for different client libraries
- * @param config Configuration options for nonce middleware
+ * Create Nonce Middleware for API Request Validation
+ * @param config Middleware configuration options
  * @returns Express middleware function
  */
 export function createNonceMiddleware(config: NonceConfig = {}) {
   const {
-    expirationTime = 300000, // 5 minutes default
-    maxNonceStorage = 1000,  // 1000 nonces default
-    clientLibrary = ClientLibrary.DEFAULT
+    expirationTime = 300000, // 5 minutes
+    maxNonceStorage = 1000,
+    clientLibrary = ClientLibrary.DEFAULT,
+    protectedMethods = [
+      HttpMethod.POST, 
+      HttpMethod.PUT, 
+      HttpMethod.PATCH, 
+      HttpMethod.DELETE
+    ]
   } = config;
 
   /**
    * Clean up old nonces to prevent memory growth
    */
-  function cleanupNonces() {
+  function cleanupNonces(): void {
     if (usedNonces.size > maxNonceStorage) {
       const nonceArray = Array.from(usedNonces);
-      nonceArray.slice(0, nonceArray.length - maxNonceStorage).forEach(nonce => {
-        usedNonces.delete(nonce);
-      });
+      nonceArray
+        .slice(0, nonceArray.length - maxNonceStorage)
+        .forEach(nonce => usedNonces.delete(nonce));
     }
   }
 
   /**
-   * Inject nonce into request based on client library
-   * @param req Express request object
-   * @param nonce Generated nonce
+   * Determine the appropriate nonce header based on client library
+   * @param library Client library type
+   * @returns Nonce header name
    */
-  function injectNonce(req: Request, nonce: string) {
-    switch (clientLibrary) {
+  function getNonceHeaderKey(library: ClientLibrary): string {
+    switch (library) {
       case ClientLibrary.AXIOS:
-        req.headers['x-axios-nonce'] = nonce;
-        break;
+        return 'x-axios-nonce';
       case ClientLibrary.FETCH:
-        req.headers['x-fetch-nonce'] = nonce;
-        break;
+        return 'x-fetch-nonce';
       case ClientLibrary.SUPERAGENT:
-        req.headers['x-superagent-nonce'] = nonce;
-        break;
+        return 'x-superagent-nonce';
       default:
-        req.headers['x-nonce'] = nonce;
+        return 'x-nonce';
     }
   }
 
   /**
-   * Nonce middleware function
-   * @param req Express request
-   * @param res Express response
-   * @param next Express next function
+   * Middleware function for nonce validation and injection
    */
   return (req: Request, res: Response, next: NextFunction) => {
-    // Only validate/inject nonce for specific HTTP methods
-    const methodsToValidate = ['POST', 'PUT', 'PATCH', 'DELETE'];
-    if (!methodsToValidate.includes(req.method)) {
+    // Skip nonce validation for non-protected methods
+    if (!protectedMethods.includes(req.method as HttpMethod)) {
       return next();
     }
 
-    // Extract nonce from headers or body
-    const headerNonceKey = 
-      clientLibrary === ClientLibrary.AXIOS ? 'x-axios-nonce' :
-      clientLibrary === ClientLibrary.FETCH ? 'x-fetch-nonce' :
-      clientLibrary === ClientLibrary.SUPERAGENT ? 'x-superagent-nonce' :
-      'x-nonce';
+    const nonceHeaderKey = getNonceHeaderKey(clientLibrary);
+    const nonce = 
+      req.headers[nonceHeaderKey] as string || 
+      req.body?.nonce;
 
-    const nonce = req.headers[headerNonceKey] as string || req.body?.nonce;
-
-    // If no nonce exists, generate and inject a new one
+    // If no nonce exists, automatically generate and inject
     if (!nonce) {
       const newNonce = generateNonce(clientLibrary);
-      injectNonce(req, newNonce);
+      req.headers[nonceHeaderKey] = newNonce;
+      
+      // Ensure body exists for nonce injection
       req.body = req.body || {};
       req.body.nonce = newNonce;
-    } else {
-      // Validate nonce format (must be a valid SHA-256 hash)
-      const nonceRegex = /^[a-f0-9]{64}$/i;
-      if (!nonceRegex.test(nonce)) {
-        return res.status(400).json({ 
-          error: 'Invalid nonce format' 
-        });
-      }
-
-      // Check if nonce has been used before
-      if (usedNonces.has(nonce)) {
-        return res.status(409).json({ 
-          error: 'Nonce has already been used' 
-        });
-      }
-
-      // Add nonce to used nonces
-      usedNonces.add(nonce);
+      
+      return next();
     }
+
+    // Validate nonce format
+    const nonceRegex = /^[a-f0-9]{64}$/i;
+    if (!nonceRegex.test(nonce)) {
+      return res.status(400).json({ 
+        error: 'Invalid nonce format',
+        details: 'Nonce must be a 64-character hexadecimal string'
+      });
+    }
+
+    // Check for replay attacks
+    if (usedNonces.has(nonce)) {
+      return res.status(409).json({ 
+        error: 'Nonce already used',
+        details: 'This nonce has been previously consumed'
+      });
+    }
+
+    // Add nonce to used nonces
+    usedNonces.add(nonce);
 
     // Schedule nonce cleanup
     setTimeout(() => {
-      usedNonces.delete(nonce || '');
+      usedNonces.delete(nonce);
     }, expirationTime);
 
-    // Perform periodic cleanup
+    // Periodic nonce cleanup
     cleanupNonces();
 
     next();
   };
 }
 
-// Export nonce-related utilities
+// Utility export for consistency
 export const NonceUtils = {
   generateNonce,
   createNonceMiddleware
